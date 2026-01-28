@@ -1,0 +1,579 @@
+openapi: 3.0.3
+
+info:
+  title: normalization_service_v1
+  description: |
+    API corporativa de El Corte Inglés que expone las funcionalidades del Servicio de Normalización Corporativa utilizado por los programas COBOL: normalización de nombres y direcciones, cálculo de claves fonéticas y formalización de direcciones..
+    
+    **COBOL Module Equivalences:**
+    - POST /normalizations → MK12NORM
+    - POST /phonetic-keys → MK12CLFO
+    - POST /address-formalizations → MK12FORM
+  version: 1.0.0
+  contact:
+    name: pendiente
+    url: URLpendiente
+  license:
+    name: Nombre de licencia
+    url: URLdelicencia    
+  x-owner: gis-core
+  x-domain: corporativo
+  x-api-type: internal
+  x-criticality: medium
+
+x-wso2-auth-header: Authorization
+x-wso2-cors:
+  corsConfigurationEnabled: true
+  accessControlAllowOrigins:
+    - "*"
+  accessControlAllowMethods:
+    - POST
+    - GET
+  accessControlAllowHeaders:
+    - Authorization
+    - Content-Type
+    - x-correlation-id
+  accessControlAllowCredentials: false
+
+servers:
+  - url: '{protocol}://geocode/{basePath}'
+    variables:
+      protocol:
+        enum:
+          - http
+          - https
+        default: https
+        description: This value is assigned by the transfer protocol that has to be used
+      basePath:
+        default: services/contexto-organizativo/v1
+
+tags:
+  - name: normalizations
+    description: Corporate data normalization
+  - name: phonetics
+    description: Phonetic key calculation
+  - name: formalizations
+    description: Address formalization
+  - name: health
+    description: Service health status
+
+security:
+  - oauth2:
+      - normalization.write
+      - phonetic.write
+
+paths:
+
+  /normalizations:
+    post:
+      tags:
+        - normalizations
+      summary: Normalize names and addresses
+      description: |
+        Non-CRUD operation equivalent to COBOL module MK12NORM.
+        Normalizes names, surnames, and addresses according to
+        El Corte Inglés corporate standards.
+        
+        **Normalization Types:**
+        - "1": Name only
+        - "2": Address only
+        - "3": Both name and address
+      operationId: normalize_data
+      security:
+        - oauth2:
+            - normalization.write
+      parameters:
+        - $ref: '#/components/parameters/correlation_id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/normalization_request'
+            examples:
+              complete_normalization:
+                summary: Complete normalization (name + address)
+                value:
+                  application_code: ABC
+                  address_country:
+                    code: "724"
+                  normalization_type: "3"
+                  given_name: JUAN
+                  family_name: PEREZ
+                  second_family_name: GOMEZ
+                  full_address: "CL MAYOR 10"
+              name_only:
+                summary: Name normalization only
+                value:
+                  application_code: ABC
+                  address_country:
+                    code: "724"
+                  normalization_type: "1"
+                  given_name: MARIA
+                  family_name: GARCIA
+                  second_family_name: LOPEZ
+      responses:
+        '200':
+          description: Normalization result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/normalization_response'
+              examples:
+                success:
+                  value:
+                    normalized_given_name: JUAN
+                    normalized_family_name: PEREZ
+                    normalized_second_family_name: GOMEZ
+                    phonetic_key: J500P620G520
+                    street_name: MAYOR
+                    street_number: "10"
+                    postal_code: "28013"
+                    address_locality:
+                      name: MADRID
+                    address_province:
+                      name: MADRID
+                    normalization_result: OK
+        '400':
+          $ref: '#/components/responses/bad_request'
+        '401':
+          $ref: '#/components/responses/unauthorized'
+        '403':
+          $ref: '#/components/responses/forbidden'
+        '404':
+          $ref: '#/components/responses/not_found'
+        '409':
+          $ref: '#/components/responses/conflict'
+        '500':
+          $ref: '#/components/responses/internal_server_error'
+        '502':
+          $ref: '#/components/responses/bad_gateway'
+        '504':
+          $ref: '#/components/responses/gateway_timeout'
+
+  /phonetic-keys:
+    post:
+      tags:
+        - phonetics
+      summary: Calculate phonetic key
+      description: |
+        Non-CRUD operation equivalent to COBOL module MK12CLFO.
+        Calculates the phonetic key using Soundex algorithm adapted
+        to Spanish language.
+      operationId: calculate_phonetic_key
+      security:
+        - oauth2:
+            - phonetic.write
+      parameters:
+        - $ref: '#/components/parameters/correlation_id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/phonetic_key_request'
+            examples:
+              name_example:
+                summary: Calculate phonetic key for a name
+                value:
+                  text: JUAN PEREZ
+              address_example:
+                summary: Calculate phonetic key for an address
+                value:
+                  text: CALLE MAYOR
+      responses:
+        '200':
+          description: Phonetic key calculated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/phonetic_key_response'
+              examples:
+                success:
+                  value:
+                    phonetic_key: J500P620
+        '400':
+          $ref: '#/components/responses/bad_request'
+        '401':
+          $ref: '#/components/responses/unauthorized'
+        '403':
+          $ref: '#/components/responses/forbidden'
+        '500':
+          $ref: '#/components/responses/internal_server_error'
+
+  /address-formalizations:
+    post:
+      tags:
+        - formalizations
+      summary: Formalize address remainder
+      description: |
+        Non-CRUD operation equivalent to COBOL module MK12FORM.
+        Returns the normalized address and the address remainder
+        without abbreviations.
+      operationId: formalize_address
+      security:
+        - oauth2:
+            - normalization.write
+      parameters:
+        - $ref: '#/components/parameters/correlation_id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/formalization_request'
+            examples:
+              example:
+                value:
+                  application_code: ABC
+                  address_country:
+                    code: "724"
+                  normalization_type: "2"
+                  full_address: "CL MAYOR 10 3 IZQ"
+      responses:
+        '200':
+          description: Formalized address
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/formalization_response'
+              examples:
+                success:
+                  value:
+                    normalization:
+                      street_name: MAYOR
+                      street_number: "10"
+                      postal_code: "28013"
+                      address_locality:
+                        name: MADRID
+                      address_province:
+                        name: MADRID
+                      normalization_result: OK
+                    address_remainder: "TERCERO IZQUIERDA"
+        '400':
+          $ref: '#/components/responses/bad_request'
+        '401':
+          $ref: '#/components/responses/unauthorized'
+        '403':
+          $ref: '#/components/responses/forbidden'
+        '500':
+          $ref: '#/components/responses/internal_server_error'
+
+  /health:
+    get:
+      tags:
+        - health
+      summary: Service liveness check
+      description: Checks if the service is alive and responding
+      operationId: health_check
+      security: []
+      responses:
+        '204':
+          description: Service is healthy
+        '503':
+          description: Service is unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/error'
+
+components:
+
+  parameters:
+    correlation_id:
+      name: x-correlation-id
+      in: header
+      required: false
+      description: Request traceability identifier
+      schema:
+        type: string
+        example: "req-123e4567-e89b-12d3-a456-426614174000"
+
+  securitySchemes:
+    oauth2:
+      type: oauth2
+      description: OAuth2 Client Credentials flow
+      flows:
+        clientCredentials:
+          tokenUrl: https://auth.elcorteingles.es/oauth2/token
+          scopes:
+            normalization.write: Normalization and formalization operations
+            phonetic.write: Phonetic key calculation operations
+
+  schemas:
+
+    normalization_request:
+      type: object
+      description: |
+        Normalization request (equivalent to COBOL structure AK12ENOR).
+        
+        **Required fields:** application_code, address_country, normalization_type
+      x-eci_schema: person
+      required:
+        - application_code
+        - address_country
+        - normalization_type
+      properties:
+        application_code:
+          type: string
+          maxLength: 3
+          description: Source application code
+          example: "ABC"
+        address_country:
+          type: object
+          description: Country information (ISO country code 724 for Spain)
+          x-eci_schema: country
+          required:
+            - code
+          properties:
+            code:
+              type: string
+              description: ISO country code
+              example: "724"
+        normalization_type:
+          type: string
+          description: |
+            Type of normalization to perform:
+            - "1": Name only
+            - "2": Address only
+            - "3": Both name and address
+          enum: ["1", "2", "3"]
+          example: "3"
+        given_name:
+          type: string
+          description: Given name. In the U.S., the first name of a Person
+          x-eci_schema: person
+          example: "JUAN"
+        family_name:
+          type: string
+          description: Family name. In the U.S., the last name of a Person
+          x-eci_schema: person
+          example: "PEREZ"
+        second_family_name:
+          type: string
+          description: Family name. In Spain, the second family name comes from the mother
+          x-eci_schema: person
+          example: "GOMEZ"
+        full_address:
+          type: string
+          description: Complete address in free format
+          x-eci_schema: postal_address
+          example: "CL MAYOR 10"
+
+    normalization_response:
+      type: object
+      description: |
+        Normalization result (equivalent to COBOL structure AK12NORM).
+      x-eci_schema: person
+      properties:
+        normalized_given_name:
+          type: string
+          description: Normalized given name
+          x-eci_schema: person
+          example: "JUAN"
+        normalized_family_name:
+          type: string
+          description: Normalized family name (first surname)
+          x-eci_schema: person
+          example: "PEREZ"
+        normalized_second_family_name:
+          type: string
+          description: Normalized second family name (second surname - Spain)
+          x-eci_schema: person
+          example: "GOMEZ"
+        phonetic_key:
+          type: string
+          description: Calculated phonetic key
+          example: "J500P620G520"
+        street_name:
+          type: string
+          description: The name of the street for the address
+          x-eci_schema: postal_address
+          example: "MAYOR"
+        street_number:
+          type: string
+          description: The number of the address in a certain street
+          x-eci_schema: postal_address
+          example: "10"
+        postal_code:
+          type: string
+          description: The postal code. For example, 94043
+          x-eci_schema: postal_address
+          example: "28013"
+        address_locality:
+          type: object
+          description: Text specifying the name of the locality, for example a city
+          x-eci_schema: locality
+          properties:
+            name:
+              type: string
+              description: Name of the locality
+              example: "MADRID"
+        address_province:
+          type: object
+          description: The second administrative level of a region in Spain
+          x-eci_schema: place
+          properties:
+            name:
+              type: string
+              description: Name of the province
+              example: "MADRID"
+        normalization_result:
+          type: string
+          description: Functional result of the process
+          example: "OK"
+
+    phonetic_key_request:
+      type: object
+      description: Phonetic key calculation request
+      x-eci_schema: true
+      required:
+        - text
+      properties:
+        text:
+          type: string
+          description: Input text for phonetic calculation
+          example: "JUAN PEREZ"
+
+    phonetic_key_response:
+      type: object
+      description: Phonetic key calculation response
+      x-eci_schema: true
+      properties:
+        phonetic_key:
+          type: string
+          description: Calculated phonetic key
+          example: "J500P620"
+
+    formalization_request:
+      allOf:
+        - $ref: '#/components/schemas/normalization_request'
+      description: |
+        Address formalization request.
+        Uses the same structure as normalization_request.
+
+    formalization_response:
+      type: object
+      description: Address formalization response
+      x-eci_schema: true
+      properties:
+        normalization:
+          $ref: '#/components/schemas/normalization_response'
+        address_remainder:
+          type: string
+          description: Address remainder without normalization
+          example: "TERCERO IZQUIERDA"
+
+    error:
+      type: object
+      description: Standard error response following ECI corporate model
+      x-eci_schema: true
+      required:
+        - message
+        - request_id
+      properties:
+        message:
+          type: string
+          description: Human-readable error message
+          example: "Validation error: address_country is required"
+        request_id:
+          type: string
+          description: Unique request identifier for traceability
+          example: "req-123e4567-e89b-12d3-a456-426614174000"
+        code:
+          type: string
+          description: Application-specific error code
+          example: "NORM_VAL_001"
+        details:
+          type: object
+          description: Additional error details
+          example:
+            field: "address_country"
+            constraint: "required"
+            provided: null
+
+  responses:
+    bad_request:
+      description: Bad request - invalid parameters
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/error'
+          examples:
+            validation_error:
+              value:
+                message: "Validation error: address_country is required"
+                request_id: "req-123e4567-e89b-12d3-a456-426614174000"
+                code: "NORM_VAL_001"
+                details:
+                  field: "address_country"
+                  constraint: "required"
+    
+    unauthorized:
+      description: Unauthorized - authentication required
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/error'
+          examples:
+            missing_token:
+              value:
+                message: "Authentication required"
+                request_id: "req-123e4567-e89b-12d3-a456-426614174000"
+                code: "AUTH_001"
+    
+    forbidden:
+      description: Forbidden - insufficient permissions
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/error'
+          examples:
+            insufficient_scope:
+              value:
+                message: "Insufficient permissions"
+                request_id: "req-123e4567-e89b-12d3-a456-426614174000"
+                code: "AUTH_002"
+                details:
+                  required_scope: "normalization.write"
+    
+    not_found:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/error'
+    
+    conflict:
+      description: Business conflict
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/error'
+    
+    internal_server_error:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/error'
+          examples:
+            generic_error:
+              value:
+                message: "Internal server error"
+                request_id: "req-123e4567-e89b-12d3-a456-426614174000"
+                code: "NORM_ERR_500"
+    
+    bad_gateway:
+      description: Error in external dependency
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/error'
+    
+    gateway_timeout:
+      description: Timeout in external dependency
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/error'
